@@ -1,6 +1,8 @@
 
 import 'dart:async';
+import 'package:gamepads/gamepads.dart';
 
+import 'controller.dart' as joystick;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -30,6 +32,7 @@ class MyApp extends StatelessWidget {
 }
 
 class MyAppState extends ChangeNotifier {
+  final joystick1 = joystick.JoystickGame();
   final websocketConnection = araraConnection.websocketConnection();
   final icmpPing = araraConnection.ICMPPingManager("192.168.4.1");
   bool araraConnectedViaWiFi = false;
@@ -37,10 +40,39 @@ class MyAppState extends ChangeNotifier {
   bool isReachable = false;
   bool wantedToDisconnect = false;
   Timer? _pingTimer;
+  Timer? joystickTimer;
+  StreamSubscription<GamepadEvent>? _joystickSubscription;
+
+
 
   MyAppState() {
     // Inicia o monitoramento de conexão ao criar o MyAppState
     _startPingMonitoring();
+    _initializeJoystick();
+  }
+
+ void _initializeJoystick() {
+    Timer.periodic(Duration(milliseconds: 20), (Timer) {
+          if (kDebugMode) {
+      debugPrint("rodando");
+    }
+    _joystickSubscription = Gamepads.events.listen((event) {
+      if (event.type == KeyType.button) {
+        if (event.value == 1.0) {
+          if (kDebugMode) {
+            debugPrint("Botão pressionado: ${event.key}");
+          }
+          if (event.key == 'A') {
+          }
+        }
+      } else if (event.type == KeyType.analog) {
+        if (kDebugMode) {
+          debugPrint("Eixo ${event.key} mudou para valor: ${event.value}");
+        }
+      }
+      notifyListeners();
+    });
+    });
   }
 
   void _startPingMonitoring() {
