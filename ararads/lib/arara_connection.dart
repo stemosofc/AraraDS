@@ -1,9 +1,13 @@
 
 import 'dart:async';
-import 'package:dart_ping/dart_ping.dart';
+import 'dart:convert';
+//import 'package:dart_ping/dart_ping.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
+import 'dart:io';
+import 'package:ping_win32/ping_win32.dart';
+
 
 
 class websocketConnection{
@@ -14,7 +18,7 @@ Future<bool> connectWifi() async {
   try{
   ws = WebSocketChannel.connect(Uri.parse('ws://192.168.4.1/ws'));
   return await checkConnection().timeout(
-      const Duration(seconds: 5), // **Timeout adicionado para limitar a tentativa de conexão**
+      const Duration(seconds: 3),
       onTimeout: () {
         return false;
       }
@@ -26,7 +30,7 @@ Future<bool> connectWifi() async {
 
 Future<void> disconnectWifi() async {
     try {
-    await ws?.sink.close(status.goingAway);
+    await ws?.sink.close(1000, "Encerramento Normal");
   } catch (e) {
   }
 }
@@ -58,7 +62,7 @@ Future<bool> checkConnection() async {
       }
     },
   );
-  await Future.delayed(const Duration(seconds: 2));
+  await Future.delayed(const Duration(seconds: 1));
   if (!completer.isCompleted) {
     completer.complete(false);
   }
@@ -107,78 +111,26 @@ Future<bool> endOfConnection() async {
 class ICMPPingManager {
   final String ipAddress;
   ICMPPingManager(this.ipAddress);
+  
+  
+
 
   Future<bool> checkPing() async {
-  final ping = Ping(ipAddress, count: 1, timeout: 1); // Um ping único com timeout de 1 segundo
-  Completer<bool> completer = Completer<bool>();
-
-  ping.stream.listen(
-    (event) {
-      if (!completer.isCompleted) {
-        if (event.response != null) {
-          completer.complete(true); // Ping bem-sucedido
-        } else {
-          completer.complete(false); // Ping falhou
-        }
-      }
-    },
-    onError: (error) {
-      if (!completer.isCompleted) {
-        completer.complete(false); // Completa com falso em caso de erro
-      }
-    },
-    onDone: () {
-      if (!completer.isCompleted) {
-        completer.complete(false); // Completa com falso se o stream terminar sem resposta
-      }
-    },
+  final ping = await PingWin32.ping(
+    InternetAddress.tryParse(this.ipAddress)!,
+    timeout: Duration(seconds: 2),
   );
-
+  Completer<bool> completer = Completer<bool>();
+  if(ping != null){
+    debugPrint(ping.statusString);
+    if(ping.statusString == "IP_SUCCESS"){
+      completer.complete(true);
+    }
+  }
   // Define um tempo limite para o ping, retornando falso se o tempo limite for excedido
   return completer.future.timeout(
-    Duration(seconds: 2),
+    const Duration(seconds: 2),
     onTimeout: () => false,
   );
-}
-
-
-  Future<Duration?> ping() async {
-    final ping = Ping(ipAddress, count: 1, timeout: 1); // Um ping com timeout de 1 segundo
-    Completer<Duration?> completer = Completer<Duration?>();
-    ping.stream.listen(
-      (event) {
-        if (event.response != null) {
-          final responseTime = event.response!.time!.inMilliseconds;
-          completer.complete(Duration(milliseconds: responseTime));
-        } else {
-          completer.complete(null);
-        }
-      },
-      onError: (error) {
-        if (!completer.isCompleted) {
-          completer.completeError('Erro ao tentar ping: $error');
-        }
-      },
-      onDone: () {
-        if (!completer.isCompleted) {
-          completer.complete(null); // Caso o ping não tenha retornado uma resposta
-        }
-      },
-    );
-
-    // Define um tempo limite para o ping
-    return completer.future.timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => null,
-    );
-  }
-
-  // Método para monitorar a conectividade periodicamente
-  Stream<bool> monitorConnection({int intervalSeconds = 5}) async* {
-    while (true) {
-      final response = await ping();
-      yield response != null; // Retorna verdadeiro se houver resposta, falso se não houver
-      await Future.delayed(Duration(seconds: intervalSeconds));
-    }
   }
 }
